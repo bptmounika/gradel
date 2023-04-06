@@ -18,7 +18,9 @@ package org.gradle.internal.instrumentation.extensions.property
 
 import com.google.testing.compile.Compilation
 import com.google.testing.compile.JavaFileObjects
+import org.gradle.api.JavaVersion
 import org.gradle.internal.instrumentation.processor.ConfigurationCacheInstrumentationProcessor
+import org.gradle.internal.jvm.Jvm
 import spock.lang.Specification
 
 import javax.tools.JavaFileObject
@@ -347,21 +349,30 @@ class PropertyUpgradeCodeGenTest extends Specification {
         """)
 
         when:
-        Compilation compilation = compile(givenSource, givenAccessorsSource)
+        Compilation compilation = compile(givenAccessorsSource, givenSource)
 
         then:
         assertThat(compilation).failed()
-        assertThat(compilation).hadErrorCount(10)
-        assertThat(compilation).hadErrorContaining("No custom accessors found for property: org.gradle.test.Task.getMaxWarnings().")
-        assertThat(compilation).hadErrorContaining("No accessors annotated with @UpgradedGroovyProperty for property: org.gradle.test.Task.getMaxWarnings(). There should be 1 accessor with that annotation.")
-        assertThat(compilation).hadErrorContaining("No accessors annotated with @UpgradedGetter for property: org.gradle.test.Task.getMaxWarnings(). There should be at least 1 accessor with that annotation.")
-        assertThat(compilation).hadErrorContaining("First parameter for accessor method 'org.gradle.test.TaskCustomAccessors.access_setMaxErrors()' should be of type 'org.gradle.test.Task', but this method has no parameter.")
-        assertThat(compilation).hadErrorContaining("First parameter for accessor method 'org.gradle.test.TaskCustomAccessors.access_setMaxErrors(int)' should be of type 'org.gradle.test.Task', but is 'int'.")
-        assertThat(compilation).hadErrorContaining("Too many parameters for accessor method 'org.gradle.test.TaskCustomAccessors.access_getMaxErrors(org.gradle.test.Task,int)' annotated with @UpgradedGroovyProperty or @UpgradedGetter. There should be just 1 parameter of type 'org.gradle.test.Task', but this method has also additional parameters.")
-        assertThat(compilation).hadErrorContaining("Accessor method 'org.gradle.test.TaskCustomAccessors.setMaxSuccesses(org.gradle.test.Task)' name should start with 'access_'.")
-        assertThat(compilation).hadErrorContaining("Accessor method 'org.gradle.test.TaskCustomAccessors.access_getMaxSuccesses(org.gradle.test.Task)' annotated with @UpgradedGroovyProperty or @UpgradedGetter should not have return type 'void'.")
-        assertThat(compilation).hadErrorContaining("Accessor method 'org.gradle.test.TaskCustomAccessors.access_setAndGetMinErrors(org.gradle.test.Task)' should not have have @UpgradedGetter and @UpgradedSetter annotation.")
-        assertThat(compilation).hadErrorContaining("Accessor method 'org.gradle.test.TaskCustomAccessors.access_setAndGetMinErrors(org.gradle.test.Task)' should not have have @UpgradedGroovyProperty and @UpgradedSetter annotation.")
+        if (JavaVersion.current().isJava8()) {
+            // Java8 reports just one error per line
+            assertThat(compilation).hadErrorCount(4)
+            assertThat(compilation).hadErrorContaining("No custom accessors found for property: org.gradle.test.Task.getMaxWarnings().")
+            assertThat(compilation).hadErrorContaining("First parameter for accessor method 'org.gradle.test.TaskCustomAccessors.access_setMaxErrors()' should be of type 'org.gradle.test.Task', but this method has no parameter.")
+            assertThat(compilation).hadErrorContaining("Accessor method 'org.gradle.test.TaskCustomAccessors.access_setAndGetMinErrors(org.gradle.test.Task)' should not have have @UpgradedGetter and @UpgradedSetter annotation.")
+            assertThat(compilation).hadErrorContaining("Accessor method 'org.gradle.test.TaskCustomAccessors.setMaxSuccesses(org.gradle.test.Task)' name should start with 'access_'.")
+        } else {
+            assertThat(compilation).hadErrorCount(10)
+            assertThat(compilation).hadErrorContaining("No custom accessors found for property: org.gradle.test.Task.getMaxWarnings().")
+            assertThat(compilation).hadErrorContaining("No accessors annotated with @UpgradedGroovyProperty for property: org.gradle.test.Task.getMaxWarnings(). There should be 1 accessor with that annotation.")
+            assertThat(compilation).hadErrorContaining("No accessors annotated with @UpgradedGetter for property: org.gradle.test.Task.getMaxWarnings(). There should be at least 1 accessor with that annotation.")
+            assertThat(compilation).hadErrorContaining("First parameter for accessor method 'org.gradle.test.TaskCustomAccessors.access_setMaxErrors()' should be of type 'org.gradle.test.Task', but this method has no parameter.")
+            assertThat(compilation).hadErrorContaining("First parameter for accessor method 'org.gradle.test.TaskCustomAccessors.access_setMaxErrors(int)' should be of type 'org.gradle.test.Task', but is 'int'.")
+            assertThat(compilation).hadErrorContaining("Too many parameters for accessor method 'org.gradle.test.TaskCustomAccessors.access_getMaxErrors(org.gradle.test.Task,int)' annotated with @UpgradedGroovyProperty or @UpgradedGetter. There should be just 1 parameter of type 'org.gradle.test.Task', but this method has also additional parameters.")
+            assertThat(compilation).hadErrorContaining("Accessor method 'org.gradle.test.TaskCustomAccessors.setMaxSuccesses(org.gradle.test.Task)' name should start with 'access_'.")
+            assertThat(compilation).hadErrorContaining("Accessor method 'org.gradle.test.TaskCustomAccessors.access_getMaxSuccesses(org.gradle.test.Task)' annotated with @UpgradedGroovyProperty or @UpgradedGetter should not have return type 'void'.")
+            assertThat(compilation).hadErrorContaining("Accessor method 'org.gradle.test.TaskCustomAccessors.access_setAndGetMinErrors(org.gradle.test.Task)' should not have have @UpgradedGetter and @UpgradedSetter annotation.")
+            assertThat(compilation).hadErrorContaining("Accessor method 'org.gradle.test.TaskCustomAccessors.access_setAndGetMinErrors(org.gradle.test.Task)' should not have have @UpgradedGroovyProperty and @UpgradedSetter annotation.")
+        }
     }
 
     def "should fail compilation with error if custom accessor method is for multiple properties"() {
@@ -407,10 +418,17 @@ class PropertyUpgradeCodeGenTest extends Specification {
         assertThat(compilation).hadErrorContaining("Accessor method 'org.gradle.test.TaskCustomAccessors.access_getMaxErrors(org.gradle.test.Task)' is used multiple different properties. That use case is not supported.")
     }
 
-    private static Compilation compile(JavaFileObject... fileObjects) {
-        return javac()
-            .withOptions("--release=8")
+    protected static Compilation compile(JavaFileObject... fileObjects) {
+        return getCompiler()
             .withProcessors(new ConfigurationCacheInstrumentationProcessor())
             .compile(fileObjects)
+    }
+
+    private static com.google.testing.compile.Compiler getCompiler() {
+        if (Jvm.current().javaVersion.isCompatibleWith(JavaVersion.VERSION_1_9)) {
+            return javac().withOptions("--release=8")
+        } else {
+            return javac()
+        }
     }
 }
