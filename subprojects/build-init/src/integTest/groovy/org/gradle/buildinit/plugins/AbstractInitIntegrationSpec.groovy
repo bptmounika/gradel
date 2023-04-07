@@ -37,6 +37,7 @@ abstract class AbstractInitIntegrationSpec extends AbstractIntegrationSpec {
         file("settings.gradle") << """
             // This is here to prevent Gradle searching up to find the build's settings.gradle
         """
+        file("gradle.properties") << "\nkotlin.incremental.useClasspathSnapshot=false\n"
         initializeIntoTestDir()
         executer.withRepositoryMirrors()
     }

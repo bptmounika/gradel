@@ -106,6 +106,8 @@ class SamplesJavaTestingIntegrationTest extends AbstractSampleIntegrationTest {
         given:
         TestFile dslDir = sample.dir.file(dsl)
         executer.inDirectory(dslDir)
+        // To workaround failure with Kotlin 1.8.20
+        dslDir.file("gradle.properties") << "\nkotlin.incremental.useClasspathSnapshot=false\n"
 
         when:
         def result = succeeds("test", "testReport")
