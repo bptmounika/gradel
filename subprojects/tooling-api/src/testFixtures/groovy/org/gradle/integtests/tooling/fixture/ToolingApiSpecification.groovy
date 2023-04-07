@@ -359,6 +359,7 @@ abstract class ToolingApiSpecification extends Specification implements TestProj
     def <T> T loadToolingModel(Class<T> modelClass, @DelegatesTo(ModelBuilder<T>) Closure cl = {}) {
         def result = loadToolingLeanModel(modelClass, cl)
         assertHasConfigureSuccessfulLogging()
+        validateOutput()
         return result
     }
 
